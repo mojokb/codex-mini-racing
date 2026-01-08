@@ -6,7 +6,27 @@ const port = Number(process.env.PORT) || 8080;
 const maxConnections = Number(process.env.MAX_CONNECTIONS) || 0;
 
 const server = new WebSocketServer({ port });
-const sessions = new Map<WebSocket, { id: string; connectedAt: number }>();
+type Session = {
+  id: string;
+  connectedAt: number;
+  inputQueue: Map<number, unknown>;
+};
+
+const sessions = new Map<WebSocket, Session>();
+
+const isInputMessage = (value: unknown): value is ClientToServerMessage<unknown> => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as { type?: unknown; sequence?: unknown; payload?: unknown };
+  return (
+    candidate.type === "input" &&
+    typeof candidate.sequence === "number" &&
+    Number.isFinite(candidate.sequence) &&
+    "payload" in candidate
+  );
+};
 
 server.on("connection", (socket) => {
   if (maxConnections > 0 && sessions.size >= maxConnections) {
@@ -14,7 +34,11 @@ server.on("connection", (socket) => {
     return;
   }
 
-  const session = { id: randomUUID(), connectedAt: Date.now() };
+  const session: Session = {
+    id: randomUUID(),
+    connectedAt: Date.now(),
+    inputQueue: new Map(),
+  };
   sessions.set(socket, session);
 
   socket.on("message", (data) => {
@@ -25,7 +49,11 @@ server.on("connection", (socket) => {
       return;
     }
 
-    if (parsed?.type === "input") {
+    if (isInputMessage(parsed)) {
+      if (!session.inputQueue.has(parsed.sequence)) {
+        session.inputQueue.set(parsed.sequence, parsed.payload);
+      }
+
       const response: ServerToClientMessage<unknown> = {
         type: "state",
         payload: parsed.payload,
