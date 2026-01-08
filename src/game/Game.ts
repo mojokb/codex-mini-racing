@@ -1,9 +1,15 @@
 import { Car } from './Car';
-import { Input } from './Input';
+import { Input, InputState } from './Input';
 import { length } from './Math2D';
 import { MultiplayerSpec } from './MultiplayerSpec';
 import { Track, SurfaceType } from './Track';
 import { Hud } from '../ui/Hud';
+
+export type NetworkClient = {
+  connect: (url: string) => void;
+  sendInput: (payload: InputState) => void;
+  onState: (callback: (state: unknown) => void) => void;
+};
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -12,6 +18,7 @@ export class Game {
   private track: Track;
   private car: Car;
   private hud: Hud;
+  private networkClient?: NetworkClient;
   private lastTime = 0;
   private accumulator = 0;
   private lapStartTime = 0;
@@ -23,7 +30,7 @@ export class Game {
 
   private static readonly STEP = MultiplayerSpec.tickSeconds;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, networkClient?: NetworkClient) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -37,6 +44,11 @@ export class Game {
     this.car = new Car(this.track.spawn);
     this.hud = new Hud();
     this.resetLap(performance.now());
+
+    if (networkClient) {
+      this.networkClient = networkClient;
+      this.networkClient.onState(this.handleNetworkState);
+    }
   }
 
   start(): void {
@@ -70,6 +82,7 @@ export class Game {
 
   private update(dt: number, timestamp: number): void {
     const input = this.input.snapshot;
+    this.networkClient?.sendInput(input);
     if (input.reset) {
       this.car.reset(this.track.spawn);
       this.resetLap(timestamp);
@@ -130,4 +143,6 @@ export class Game {
       speed: length(this.car.velocity)
     });
   }
+
+  private handleNetworkState = (_state: unknown): void => undefined;
 }

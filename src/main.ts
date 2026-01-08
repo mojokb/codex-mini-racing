@@ -1,4 +1,5 @@
 import { Game } from './game/Game';
+import { MultiplayerClient } from './net/MultiplayerClient';
 
 const LOGICAL_WIDTH = 320;
 const LOGICAL_HEIGHT = 240;
@@ -18,5 +19,8 @@ ctx.imageSmoothingEnabled = false;
 
 document.body.appendChild(canvas);
 
-const game = new Game(canvas);
+const multiplayerClient = new MultiplayerClient();
+multiplayerClient.connect('ws://localhost:8080');
+
+const game = new Game(canvas, multiplayerClient);
 game.start();
