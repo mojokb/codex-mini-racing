@@ -1,3 +1,5 @@
+import type { InputSnapshot } from '../game/Input';
+
 type StateCallback = (state: unknown) => void;
 
 type ServerMessage = {
@@ -12,21 +14,19 @@ export class MultiplayerClient {
   private reconnectTimer: number | null = null;
   private reconnectDelayMs = 1000;
   private readonly maxReconnectDelayMs = 8000;
-  private inputSequence = 0;
 
   connect(url: string): void {
     this.url = url;
     this.openSocket();
   }
 
-  sendInput(payload: unknown): void {
+  sendInput(snapshot: InputSnapshot): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       return;
     }
 
-    const message = { type: 'input', sequence: this.inputSequence, payload };
+    const message = { type: 'input', sequence: snapshot.sequence, payload: snapshot.state };
     this.socket.send(JSON.stringify(message));
-    this.inputSequence += 1;
   }
 
   onState(callback: StateCallback): void {
@@ -52,7 +52,6 @@ export class MultiplayerClient {
 
   private handleOpen = (): void => {
     this.reconnectDelayMs = 1000;
-    this.inputSequence = 0;
   };
 
   private handleMessage = (event: MessageEvent<string>): void => {

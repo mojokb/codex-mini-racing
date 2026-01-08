@@ -9,5 +9,7 @@ export const MultiplayerSpec = {
   stateSyncRateHz: 20,
   stateSyncIntervalSeconds: 1 / 20,
   inputSequenceRule:
-    'Inputs are numbered per tick with an increasing sequence starting at 0. The server uses the latest contiguous sequence to advance simulation.'
+    'Inputs are numbered per tick with an increasing sequence starting at 0. The server uses the latest contiguous sequence to advance simulation.',
+  stateSequenceRule:
+    'State syncs include lastProcessedInputSequence. Clients treat inputs up to that sequence as acknowledged and only replay inputs above it.'
 };
