@@ -1,6 +1,7 @@
 import { Car } from './Car';
 import { Input } from './Input';
 import { length } from './Math2D';
+import { MultiplayerSpec } from './MultiplayerSpec';
 import { Track, SurfaceType } from './Track';
 import { Hud } from '../ui/Hud';
 
@@ -20,7 +21,7 @@ export class Game {
   private onCheckpoint = false;
   private lapActive = false;
 
-  private static readonly STEP = 1 / 60;
+  private static readonly STEP = MultiplayerSpec.tickSeconds;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -55,6 +56,9 @@ export class Game {
     this.lastTime = timestamp;
     this.accumulator += delta;
 
+    // Multiplayer model: server-authoritative. Clients send inputs per tick and
+    // receive periodic state syncs; the fixed-step loop here defines the tick
+    // (60Hz) while state snapshots arrive at 20Hz.
     while (this.accumulator >= Game.STEP) {
       this.update(Game.STEP, timestamp);
       this.accumulator -= Game.STEP;
