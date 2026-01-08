@@ -11,12 +11,15 @@ export type NetworkClient = {
   onState: (callback: (state: unknown) => void) => void;
 };
 
+export type PlayerId = string;
+
 export class Game {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private input: Input;
   private track: Track;
-  private car: Car;
+  private cars: Map<PlayerId, Car>;
+  private localPlayerId: PlayerId;
   private hud: Hud;
   private networkClient?: NetworkClient;
   private lastTime = 0;
@@ -42,7 +45,8 @@ export class Game {
 
     this.input = new Input();
     this.track = new Track(1024, 768);
-    this.car = new Car(this.track.spawn);
+    this.localPlayerId = 'local';
+    this.cars = new Map([[this.localPlayerId, new Car(this.track.spawn)]]);
     this.hud = new Hud();
     this.resetLap(performance.now());
 
@@ -88,24 +92,29 @@ export class Game {
     if (sent) {
       this.input.advanceSequence();
     }
-    if (input.reset) {
-      this.car.reset(this.track.spawn);
+    const localCar = this.getLocalCar();
+    if (input.reset && localCar) {
+      localCar.reset(this.track.spawn);
       this.resetLap(timestamp);
       this.input.clearReset();
       return;
     }
 
-    const prevPos = { ...this.car.position };
-    const surfaceBefore = this.track.getSurfaceAt(this.car.position);
-    this.car.update(dt, input, surfaceBefore);
-
-    const surfaceAfter = this.track.getSurfaceAt(this.car.position);
-    if (surfaceAfter === SurfaceType.Wall) {
-      this.car.position = prevPos;
-      this.car.handleWallCollision();
+    if (!localCar) {
+      return;
     }
 
-    const checkpointIndex = this.track.getCheckpointIndex(this.car.position);
+    const prevPos = { ...localCar.position };
+    const surfaceBefore = this.track.getSurfaceAt(localCar.position);
+    localCar.update(dt, input, surfaceBefore);
+
+    const surfaceAfter = this.track.getSurfaceAt(localCar.position);
+    if (surfaceAfter === SurfaceType.Wall) {
+      localCar.position = prevPos;
+      localCar.handleWallCollision();
+    }
+
+    const checkpointIndex = this.track.getCheckpointIndex(localCar.position);
     if (checkpointIndex === -1) {
       this.onCheckpoint = false;
     } else if (!this.onCheckpoint) {
@@ -132,20 +141,23 @@ export class Game {
     this.ctx.fillStyle = '#0b0b0b';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    const cameraX = Math.round(this.car.position.x);
-    const cameraY = Math.round(this.car.position.y);
+    const localCar = this.getLocalCar();
+    const cameraX = Math.round(localCar?.position.x ?? 0);
+    const cameraY = Math.round(localCar?.position.y ?? 0);
 
     this.ctx.save();
     this.ctx.translate(Math.floor(this.canvas.width / 2), Math.floor(this.canvas.height / 2));
     this.ctx.translate(-cameraX, -cameraY);
     this.track.render(this.ctx);
-    this.car.render(this.ctx);
+    this.cars.forEach((car) => {
+      car.render(this.ctx);
+    });
     this.ctx.restore();
 
     this.hud.render(this.ctx, {
       lapTime: this.lapTime,
       bestTime: this.bestTime,
-      speed: length(this.car.velocity)
+      speed: localCar ? length(localCar.velocity) : 0
     });
   }
 
@@ -172,5 +184,9 @@ export class Game {
 
     const candidate = (state as { lastProcessedInputSequence?: unknown }).lastProcessedInputSequence;
     return typeof candidate === 'number' ? candidate : null;
+  }
+
+  private getLocalCar(): Car | undefined {
+    return this.cars.get(this.localPlayerId);
   }
 }
