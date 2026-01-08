@@ -1,4 +1,4 @@
-import { Car } from './Car';
+import { Car, CarPalette } from './Car';
 import { Input, InputSnapshot } from './Input';
 import { length } from './Math2D';
 import { MultiplayerSpec } from './MultiplayerSpec';
@@ -14,6 +14,13 @@ export type NetworkClient = {
 export type PlayerId = string;
 
 export class Game {
+  private static readonly PLAYER_PALETTES: CarPalette[] = [
+    { bodyColor: '#e53935', roofColor: '#ffffff' },
+    { bodyColor: '#1e88e5', roofColor: '#ffffff' },
+    { bodyColor: '#43a047', roofColor: '#ffffff' },
+    { bodyColor: '#fdd835', roofColor: '#1a1a1a' }
+  ];
+
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private input: Input;
@@ -46,7 +53,8 @@ export class Game {
     this.input = new Input();
     this.track = new Track(1024, 768);
     this.localPlayerId = 'local';
-    this.cars = new Map([[this.localPlayerId, new Car(this.track.spawn)]]);
+    const localPalette = this.getPaletteForPlayer(this.localPlayerId);
+    this.cars = new Map([[this.localPlayerId, new Car(this.track.spawn, localPalette)]]);
     this.hud = new Hud();
     this.resetLap(performance.now());
 
@@ -188,5 +196,23 @@ export class Game {
 
   private getLocalCar(): Car | undefined {
     return this.cars.get(this.localPlayerId);
+  }
+
+  private getPaletteForPlayer(playerId: PlayerId): CarPalette {
+    const palettes = Game.PLAYER_PALETTES;
+    if (playerId === this.localPlayerId) {
+      return palettes[0];
+    }
+    const index = Math.abs(this.hashPlayerId(playerId)) % palettes.length;
+    return palettes[index];
+  }
+
+  private hashPlayerId(playerId: PlayerId): number {
+    let hash = 0;
+    for (let i = 0; i < playerId.length; i += 1) {
+      hash = (hash << 5) - hash + playerId.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
   }
 }

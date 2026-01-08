@@ -5,7 +5,17 @@ import { SurfaceType } from './Track';
 
 const SPRITE_SIZE = 16;
 
-const createCarSprite = (bodyColor: string, roofColor: string): HTMLCanvasElement => {
+export type CarPalette = {
+  bodyColor: string;
+  roofColor: string;
+};
+
+const DEFAULT_PALETTE: CarPalette = {
+  bodyColor: '#e53935',
+  roofColor: '#ffffff'
+};
+
+const createCarSprite = (palette: CarPalette): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
   canvas.width = SPRITE_SIZE;
   canvas.height = SPRITE_SIZE;
@@ -19,12 +29,12 @@ const createCarSprite = (bodyColor: string, roofColor: string): HTMLCanvasElemen
   ctx.clearRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
 
   // Body silhouette
-  ctx.fillStyle = bodyColor;
+  ctx.fillStyle = palette.bodyColor;
   ctx.fillRect(2, 2, 12, 12);
   ctx.fillRect(3, 1, 10, 14);
 
   // Roof
-  ctx.fillStyle = roofColor;
+  ctx.fillStyle = palette.roofColor;
   ctx.fillRect(4, 4, 8, 6);
 
   // Windows
@@ -60,11 +70,11 @@ export class Car {
   handbrakeGrip = 0.65;
   turnRate = 2.6;
 
-  constructor(position: Vec2) {
+  constructor(position: Vec2, palette: CarPalette = DEFAULT_PALETTE) {
     this.position = { ...position };
     this.velocity = { x: 0, y: 0 };
     this.heading = -Math.PI / 2;
-    this.sprite = createCarSprite('#e53935', '#ffffff');
+    this.sprite = createCarSprite(palette);
   }
 
   reset(position: Vec2): void {
