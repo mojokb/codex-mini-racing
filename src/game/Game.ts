@@ -3,7 +3,7 @@ import { Input, InputSnapshot } from './Input';
 import { length } from './Math2D';
 import { MultiplayerSpec } from './MultiplayerSpec';
 import { Track, SurfaceType } from './Track';
-import { Hud } from '../ui/Hud';
+import { Hud, PlayerSummary } from '../ui/Hud';
 
 export type NetworkClient = {
   connect: (url: string) => void;
@@ -38,6 +38,7 @@ export class Game {
   private onCheckpoint = false;
   private lapActive = false;
   private lastAckedInputSequence = -1;
+  private latestServerState: unknown = null;
 
   private static readonly STEP = MultiplayerSpec.tickSeconds;
 
@@ -165,11 +166,13 @@ export class Game {
     this.hud.render(this.ctx, {
       lapTime: this.lapTime,
       bestTime: this.bestTime,
-      speed: localCar ? length(localCar.velocity) : 0
+      speed: localCar ? length(localCar.velocity) : 0,
+      playerSummaries: this.readPlayerSummaries(this.latestServerState)
     });
   }
 
   private handleNetworkState = (state: unknown): void => {
+    this.latestServerState = state;
     const lastProcessedInputSequence = this.readLastProcessedSequence(state);
     if (lastProcessedInputSequence === null) {
       return;
@@ -192,6 +195,43 @@ export class Game {
 
     const candidate = (state as { lastProcessedInputSequence?: unknown }).lastProcessedInputSequence;
     return typeof candidate === 'number' ? candidate : null;
+  }
+
+  private readPlayerSummaries(state: unknown): PlayerSummary[] {
+    if (!state || typeof state !== 'object') {
+      return [];
+    }
+
+    const payload = state as {
+      players?: unknown;
+      playerSummaries?: unknown;
+    };
+    const rawList = payload.playerSummaries ?? payload.players;
+    if (!Array.isArray(rawList)) {
+      return [];
+    }
+
+    return rawList.reduce<PlayerSummary[]>((summaries, entry, index) => {
+      if (!entry || typeof entry !== 'object') {
+        return summaries;
+      }
+      const record = entry as {
+        name?: unknown;
+        id?: unknown;
+        lap?: unknown;
+        lapCount?: unknown;
+        ping?: unknown;
+        pingMs?: unknown;
+      };
+      const nameCandidate = typeof record.name === 'string' ? record.name : record.id;
+      const name = typeof nameCandidate === 'string' ? nameCandidate : `Player ${index + 1}`;
+      const lapCandidate = typeof record.lap === 'number' ? record.lap : record.lapCount;
+      const lap = typeof lapCandidate === 'number' ? lapCandidate : 0;
+      const pingCandidate = typeof record.ping === 'number' ? record.ping : record.pingMs;
+      const ping = typeof pingCandidate === 'number' ? Math.round(pingCandidate) : null;
+      summaries.push({ name, lap, ping });
+      return summaries;
+    }, []);
   }
 
   private getLocalCar(): Car | undefined {

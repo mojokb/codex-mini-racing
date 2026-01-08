@@ -1,5 +1,18 @@
+export type PlayerSummary = {
+  name: string;
+  lap: number;
+  ping: number | null;
+};
+
+export type HudRenderData = {
+  lapTime: number;
+  bestTime: number | null;
+  speed: number;
+  playerSummaries: PlayerSummary[];
+};
+
 export class Hud {
-  render(ctx: CanvasRenderingContext2D, data: { lapTime: number; bestTime: number | null; speed: number }): void {
+  render(ctx: CanvasRenderingContext2D, data: HudRenderData): void {
     ctx.save();
     ctx.fillStyle = '#ffffff';
     ctx.font = '10px "Courier New", monospace';
@@ -10,6 +23,18 @@ export class Hud {
       24
     );
     ctx.fillText(`Speed: ${Math.round(data.speed)}`, 8, 36);
+
+    if (data.playerSummaries.length > 0) {
+      const lineHeight = 12;
+      let y = 52;
+      ctx.fillText('Players:', 8, y);
+      y += lineHeight;
+      data.playerSummaries.forEach((summary) => {
+        const pingText = summary.ping !== null ? `${summary.ping}ms` : '--';
+        ctx.fillText(`${summary.name}  L${summary.lap}  ${pingText}`, 8, y);
+        y += lineHeight;
+      });
+    }
     ctx.restore();
   }
 
