@@ -12,6 +12,7 @@ export class MultiplayerClient {
   private reconnectTimer: number | null = null;
   private reconnectDelayMs = 1000;
   private readonly maxReconnectDelayMs = 8000;
+  private inputSequence = 0;
 
   connect(url: string): void {
     this.url = url;
@@ -23,7 +24,9 @@ export class MultiplayerClient {
       return;
     }
 
-    this.socket.send(JSON.stringify({ type: 'input', payload }));
+    const message = { type: 'input', sequence: this.inputSequence, payload };
+    this.socket.send(JSON.stringify(message));
+    this.inputSequence += 1;
   }
 
   onState(callback: StateCallback): void {
@@ -49,6 +52,7 @@ export class MultiplayerClient {
 
   private handleOpen = (): void => {
     this.reconnectDelayMs = 1000;
+    this.inputSequence = 0;
   };
 
   private handleMessage = (event: MessageEvent<string>): void => {
