@@ -7,7 +7,7 @@ import { Hud } from '../ui/Hud';
 
 export type NetworkClient = {
   connect: (url: string) => void;
-  sendInput: (payload: InputSnapshot) => void;
+  sendInput: (payload: InputSnapshot) => boolean;
   onState: (callback: (state: unknown) => void) => void;
 };
 
@@ -84,7 +84,10 @@ export class Game {
   private update(dt: number, timestamp: number): void {
     const snapshot = this.input.createSnapshot();
     const input = snapshot.state;
-    this.networkClient?.sendInput(snapshot);
+    const sent = this.networkClient?.sendInput(snapshot) ?? false;
+    if (sent) {
+      this.input.advanceSequence();
+    }
     if (input.reset) {
       this.car.reset(this.track.spawn);
       this.resetLap(timestamp);

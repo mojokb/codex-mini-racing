@@ -20,13 +20,14 @@ export class MultiplayerClient {
     this.openSocket();
   }
 
-  sendInput(snapshot: InputSnapshot): void {
+  sendInput(snapshot: InputSnapshot): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      return;
+      return false;
     }
 
     const message = { type: 'input', sequence: snapshot.sequence, payload: snapshot.state };
     this.socket.send(JSON.stringify(message));
+    return true;
   }
 
   onState(callback: StateCallback): void {

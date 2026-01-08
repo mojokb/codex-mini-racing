@@ -47,12 +47,14 @@ export class Input {
   }
 
   createSnapshot(): InputSnapshot {
-    const snapshot = {
+    return {
       sequence: this.sequence,
       state: { ...this.state }
     };
+  }
+
+  advanceSequence(): void {
     this.sequence += 1;
-    return snapshot;
   }
 
   clearReset(): void {
