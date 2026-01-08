@@ -1,5 +1,5 @@
 import { Car } from './Car';
-import { Input, InputState } from './Input';
+import { Input, InputSnapshot } from './Input';
 import { length } from './Math2D';
 import { MultiplayerSpec } from './MultiplayerSpec';
 import { Track, SurfaceType } from './Track';
@@ -7,7 +7,7 @@ import { Hud } from '../ui/Hud';
 
 export type NetworkClient = {
   connect: (url: string) => void;
-  sendInput: (payload: InputState) => void;
+  sendInput: (payload: InputSnapshot) => boolean;
   onState: (callback: (state: unknown) => void) => void;
 };
 
@@ -27,6 +27,7 @@ export class Game {
   private nextCheckpoint = 1;
   private onCheckpoint = false;
   private lapActive = false;
+  private lastAckedInputSequence = -1;
 
   private static readonly STEP = MultiplayerSpec.tickSeconds;
 
@@ -81,8 +82,12 @@ export class Game {
   };
 
   private update(dt: number, timestamp: number): void {
-    const input = this.input.snapshot;
-    this.networkClient?.sendInput(input);
+    const snapshot = this.input.createSnapshot();
+    const input = snapshot.state;
+    const sent = this.networkClient?.sendInput(snapshot) ?? false;
+    if (sent) {
+      this.input.advanceSequence();
+    }
     if (input.reset) {
       this.car.reset(this.track.spawn);
       this.resetLap(timestamp);
@@ -144,5 +149,28 @@ export class Game {
     });
   }
 
-  private handleNetworkState = (_state: unknown): void => undefined;
+  private handleNetworkState = (state: unknown): void => {
+    const lastProcessedInputSequence = this.readLastProcessedSequence(state);
+    if (lastProcessedInputSequence === null) {
+      return;
+    }
+
+    if (lastProcessedInputSequence <= this.lastAckedInputSequence) {
+      return;
+    }
+
+    // Matching rule: server state acknowledges inputs up to the reported
+    // sequence. Inputs above this sequence remain candidates for replay when
+    // prediction/reconciliation is implemented.
+    this.lastAckedInputSequence = lastProcessedInputSequence;
+  };
+
+  private readLastProcessedSequence(state: unknown): number | null {
+    if (!state || typeof state !== 'object') {
+      return null;
+    }
+
+    const candidate = (state as { lastProcessedInputSequence?: unknown }).lastProcessedInputSequence;
+    return typeof candidate === 'number' ? candidate : null;
+  }
 }

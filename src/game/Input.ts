@@ -7,6 +7,11 @@ export type InputState = {
   reset: boolean;
 };
 
+export type InputSnapshot = {
+  sequence: number;
+  state: InputState;
+};
+
 const KEY_MAP: Record<string, keyof InputState> = {
   ArrowUp: 'accelerate',
   KeyW: 'accelerate',
@@ -29,6 +34,7 @@ export class Input {
     handbrake: false,
     reset: false
   };
+  private sequence = 0;
 
   constructor() {
     window.addEventListener('keydown', this.onKeyDown);
@@ -38,6 +44,17 @@ export class Input {
 
   get snapshot(): InputState {
     return { ...this.state };
+  }
+
+  createSnapshot(): InputSnapshot {
+    return {
+      sequence: this.sequence,
+      state: { ...this.state }
+    };
+  }
+
+  advanceSequence(): void {
+    this.sequence += 1;
   }
 
   clearReset(): void {
