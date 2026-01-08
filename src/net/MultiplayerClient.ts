@@ -1,13 +1,11 @@
 import type { InputSnapshot } from '../game/Input';
+import type { ClientToServerMessage, ServerToClientMessage } from '../shared/messages';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'failed' | 'in-game';
 
 type StateCallback = (state: unknown) => void;
 
-type ServerMessage = {
-  type?: string;
-  payload?: unknown;
-};
+type ServerMessage = ServerToClientMessage<unknown>;
 
 export class MultiplayerClient {
   private socket: WebSocket | null = null;
@@ -29,7 +27,11 @@ export class MultiplayerClient {
       return false;
     }
 
-    const message = { type: 'input', sequence: snapshot.sequence, payload: snapshot.state };
+    const message: ClientToServerMessage<InputSnapshot['state']> = {
+      type: 'input',
+      sequence: snapshot.sequence,
+      payload: snapshot.state,
+    };
     this.socket.send(JSON.stringify(message));
     return true;
   }
