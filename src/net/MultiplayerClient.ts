@@ -1,5 +1,7 @@
 import type { InputSnapshot } from '../game/Input';
 
+export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'failed' | 'in-game';
+
 type StateCallback = (state: unknown) => void;
 
 type ServerMessage = {
@@ -11,6 +13,8 @@ export class MultiplayerClient {
   private socket: WebSocket | null = null;
   private url: string | null = null;
   private stateCallback: StateCallback = () => undefined;
+  private statusCallback: (status: ConnectionStatus) => void = () => undefined;
+  private status: ConnectionStatus = 'idle';
   private reconnectTimer: number | null = null;
   private reconnectDelayMs = 1000;
   private readonly maxReconnectDelayMs = 8000;
@@ -34,6 +38,11 @@ export class MultiplayerClient {
     this.stateCallback = callback;
   }
 
+  onStatus(callback: (status: ConnectionStatus) => void): void {
+    this.statusCallback = callback;
+    callback(this.status);
+  }
+
   private openSocket(): void {
     if (!this.url) {
       return;
@@ -44,6 +53,7 @@ export class MultiplayerClient {
       this.socket.close();
     }
 
+    this.updateStatus('connecting');
     this.socket = new WebSocket(this.url);
     this.socket.addEventListener('open', this.handleOpen);
     this.socket.addEventListener('message', this.handleMessage);
@@ -53,6 +63,7 @@ export class MultiplayerClient {
 
   private handleOpen = (): void => {
     this.reconnectDelayMs = 1000;
+    this.updateStatus('connected');
   };
 
   private handleMessage = (event: MessageEvent<string>): void => {
@@ -64,6 +75,9 @@ export class MultiplayerClient {
     }
 
     if (parsed?.type === 'state') {
+      if (this.status !== 'in-game') {
+        this.updateStatus('in-game');
+      }
       this.stateCallback(parsed.payload ?? null);
     }
   };
@@ -73,10 +87,12 @@ export class MultiplayerClient {
       return;
     }
 
+    this.updateStatus('failed');
     this.scheduleReconnect();
   };
 
   private handleError = (): void => {
+    this.updateStatus('failed');
     this.socket?.close();
   };
 
@@ -97,5 +113,13 @@ export class MultiplayerClient {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+  }
+
+  private updateStatus(status: ConnectionStatus): void {
+    if (this.status === status) {
+      return;
+    }
+    this.status = status;
+    this.statusCallback(status);
   }
 }

@@ -1,9 +1,11 @@
 import { Game } from './game/Game';
 import { MultiplayerClient } from './net/MultiplayerClient';
+import { ConnectionPanel } from './ui/ConnectionPanel';
 
 const LOGICAL_WIDTH = 320;
 const LOGICAL_HEIGHT = 240;
 const SCALE = 3;
+const DEFAULT_SERVER_URL = 'ws://localhost:8080';
 
 const canvas = document.createElement('canvas');
 canvas.width = LOGICAL_WIDTH;
@@ -17,10 +19,11 @@ if (!ctx) {
 }
 ctx.imageSmoothingEnabled = false;
 
-document.body.appendChild(canvas);
-
 const multiplayerClient = new MultiplayerClient();
-multiplayerClient.connect('ws://localhost:8080');
+new ConnectionPanel(multiplayerClient, DEFAULT_SERVER_URL);
+multiplayerClient.connect(DEFAULT_SERVER_URL);
+
+document.body.appendChild(canvas);
 
 const game = new Game(canvas, multiplayerClient);
 game.start();
