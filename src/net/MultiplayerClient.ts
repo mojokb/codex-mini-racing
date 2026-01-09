@@ -64,6 +64,7 @@ export class MultiplayerClient {
   }
 
   private handleOpen = (): void => {
+    console.info('[multiplayer] connected', this.url);
     this.reconnectDelayMs = 1000;
     this.updateStatus('connected');
   };
@@ -89,11 +90,13 @@ export class MultiplayerClient {
       return;
     }
 
+    console.info('[multiplayer] disconnected', this.url);
     this.updateStatus('failed');
     this.scheduleReconnect();
   };
 
   private handleError = (): void => {
+    console.error('[multiplayer] error');
     this.updateStatus('failed');
     this.socket?.close();
   };
