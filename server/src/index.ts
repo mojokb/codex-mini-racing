@@ -61,10 +61,16 @@ const broadcastState = (): void => {
   });
 };
 
+const stateSyncRateHz = Number(process.env.STATE_SYNC_RATE_HZ) || 20;
+const stateSyncIntervalTicks = Math.max(1, Math.round(Game.TICK_RATE / stateSyncRateHz));
 const tickMs = 1000 / Game.TICK_RATE;
+let tickCount = 0;
 const tickInterval = setInterval(() => {
   game.step(Game.STEP);
-  broadcastState();
+  tickCount += 1;
+  if (tickCount % stateSyncIntervalTicks === 0) {
+    broadcastState();
+  }
 }, tickMs);
 
 server.on("close", () => {
