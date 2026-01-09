@@ -11,6 +11,22 @@ npm run dev
 
 브라우저에서 `http://localhost:5173` 접속 후 바로 플레이할 수 있습니다.
 
+## 멀티플레이어 서버 실행
+
+기본 WebSocket 서버는 `ws://localhost:8080`으로 동작합니다. 게임 화면 상단의 입력창에 해당 주소를 넣고 연결하세요.
+
+```bash
+npm run server
+```
+
+`.env` 파일로 포트와 로그 레벨을 지정할 수 있습니다.
+
+```bash
+# .env
+PORT=8080
+LOG_LEVEL=info
+```
+
 ## 조작
 
 - 가속: ↑ / W
