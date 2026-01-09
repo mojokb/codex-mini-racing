@@ -1,4 +1,4 @@
-import { WebSocketServer, type WebSocket } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import type { ClientToServerMessage, ServerToClientMessage } from "./shared/messages";
 import { randomUUID } from "crypto";
 import { Game, type InputState } from "./game/Game";
@@ -48,7 +48,7 @@ const isInputState = (value: unknown): value is InputState => {
 
 const broadcastState = (): void => {
   sessions.forEach((session) => {
-    if (session.socket.readyState !== session.socket.OPEN) {
+    if (session.socket.readyState !== WebSocket.OPEN) {
       return;
     }
 
