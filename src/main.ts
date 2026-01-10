@@ -1,6 +1,7 @@
 import { Game } from './game/Game';
 import { MultiplayerClient } from './net/MultiplayerClient';
 import { ConnectionPanel } from './ui/ConnectionPanel';
+import { LobbyPanel } from './ui/LobbyPanel';
 
 const LOGICAL_WIDTH = 320;
 const LOGICAL_HEIGHT = 240;
@@ -21,6 +22,7 @@ ctx.imageSmoothingEnabled = false;
 
 const multiplayerClient = new MultiplayerClient();
 new ConnectionPanel(multiplayerClient, DEFAULT_SERVER_URL);
+new LobbyPanel(multiplayerClient);
 multiplayerClient.connect(DEFAULT_SERVER_URL);
 
 document.body.appendChild(canvas);
