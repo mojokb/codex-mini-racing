@@ -10,7 +10,7 @@
     "test": "vitest run",
     "lint": "eslint . --ext .ts",
     "postinstall": "npm --prefix server install --no-audit --no-fund",
-    "server": "node --loader ts-node/esm server/src/index.ts"
+    "server": "node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' server/src/index.ts"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",
