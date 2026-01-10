@@ -27,6 +27,12 @@ PORT=8080
 LOG_LEVEL=info
 ```
 
+### 서버 디렉터리 안내
+
+멀티플레이어 서버 코드는 `server/` 하위에 있으며 진입점은 `server/src/index.ts`입니다. 루트에서 `npm install`을 실행하면 `postinstall` 스크립트가 서버 의존성을 함께 설치하며, 실행은 루트의 `npm run server` 스크립트를 사용합니다.
+
+`npm run server` 실행 시 `ERR_MODULE_NOT_FOUND: Cannot find package 'ts-node'` 오류가 나오면 루트에서 `npm install`을 실행해 devDependencies까지 설치했는지 확인하세요.
+
 ## 조작
 
 - 가속: ↑ / W
