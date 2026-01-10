@@ -1,3 +1,5 @@
+import { Track } from './Track';
+
 export type InputState = {
   accelerate: boolean;
   brake: boolean;
@@ -21,12 +23,17 @@ export type GameState = {
   tick: number;
   players: PlayerState[];
   lastProcessedInputSequence: number;
+  raceFinished: boolean;
+  winner: { id: string; name: string } | null;
 };
 
 type PlayerInternal = PlayerState & {
   inputQueue: Map<number, InputState>;
   lastInput: InputState;
   spawn: { x: number; y: number };
+  nextCheckpoint: number;
+  onCheckpoint: boolean;
+  lapActive: boolean;
 };
 
 const DEFAULT_INPUT: InputState = {
@@ -44,6 +51,7 @@ const TURN_RATE = 3.6;
 const DRAG = 2.2;
 const MAX_SPEED = 55;
 const MAX_REVERSE = -20;
+const LAPS_TO_WIN = 5;
 
 export class Game {
   static readonly TICK_RATE = 60;
@@ -51,6 +59,9 @@ export class Game {
 
   private players = new Map<string, PlayerInternal>();
   private tick = 0;
+  private track = new Track(1024, 768);
+  private raceFinished = false;
+  private winner: { id: string; name: string } | null = null;
 
   addPlayer(id: string, name = `Player ${this.players.size + 1}`): void {
     if (this.players.has(id)) {
@@ -58,7 +69,7 @@ export class Game {
     }
 
     const offset = this.players.size * 90;
-    const spawn = { x: 300 + offset, y: 260 };
+    const spawn = { x: this.track.spawn.x + offset, y: this.track.spawn.y };
     this.players.set(id, {
       id,
       name,
@@ -69,7 +80,10 @@ export class Game {
       lastProcessedInputSequence: -1,
       inputQueue: new Map(),
       lastInput: { ...DEFAULT_INPUT },
-      spawn
+      spawn,
+      nextCheckpoint: 1,
+      onCheckpoint: false,
+      lapActive: false
     });
   }
 
@@ -90,9 +104,13 @@ export class Game {
 
   step(dt: number): void {
     this.tick += 1;
+    if (this.raceFinished) {
+      return;
+    }
     this.players.forEach((player) => {
       this.consumeNextInput(player);
       this.updatePlayer(player, dt);
+      this.updateCheckpointProgress(player);
     });
   }
 
@@ -109,7 +127,9 @@ export class Game {
         lap: entry.lap,
         lastProcessedInputSequence: entry.lastProcessedInputSequence
       })),
-      lastProcessedInputSequence: player?.lastProcessedInputSequence ?? -1
+      lastProcessedInputSequence: player?.lastProcessedInputSequence ?? -1,
+      raceFinished: this.raceFinished,
+      winner: this.winner
     };
   }
 
@@ -138,6 +158,9 @@ export class Game {
       player.position = { ...player.spawn };
       player.speed = 0;
       player.heading = 0;
+      player.nextCheckpoint = 1;
+      player.onCheckpoint = false;
+      player.lapActive = false;
       player.lastInput = { ...player.lastInput, reset: false };
       return;
     }
@@ -165,5 +188,38 @@ export class Game {
 
     player.position.x += Math.cos(player.heading) * player.speed * dt;
     player.position.y += Math.sin(player.heading) * player.speed * dt;
+  }
+
+  private updateCheckpointProgress(player: PlayerInternal): void {
+    const checkpointIndex = this.track.getCheckpointIndex(player.position);
+    if (checkpointIndex === -1) {
+      player.onCheckpoint = false;
+      return;
+    }
+
+    if (player.onCheckpoint) {
+      return;
+    }
+
+    player.onCheckpoint = true;
+    if (checkpointIndex !== player.nextCheckpoint) {
+      return;
+    }
+
+    if (checkpointIndex === 0 && player.lapActive) {
+      player.lap += 1;
+      player.lapActive = false;
+      player.nextCheckpoint = 1;
+      if (!this.raceFinished && player.lap >= LAPS_TO_WIN) {
+        this.raceFinished = true;
+        this.winner = { id: player.id, name: player.name };
+      }
+      return;
+    }
+
+    player.nextCheckpoint = (player.nextCheckpoint + 1) % this.track.checkpoints.length;
+    if (checkpointIndex === 1) {
+      player.lapActive = true;
+    }
   }
 }
