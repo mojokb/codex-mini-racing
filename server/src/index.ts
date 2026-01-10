@@ -2,6 +2,36 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { ClientToServerMessage, ServerToClientMessage } from "./shared/messages";
 import { randomUUID } from "crypto";
 import { Game, type InputState } from "./game/Game";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
+type LogLevel = (typeof LOG_LEVELS)[number];
+const logLevelInput = (process.env.LOG_LEVEL ?? "info").toLowerCase();
+const logLevel: LogLevel = LOG_LEVELS.includes(logLevelInput as LogLevel)
+  ? (logLevelInput as LogLevel)
+  : "info";
+const logRank: Record<LogLevel, number> = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40,
+};
+const shouldLog = (level: LogLevel): boolean => logRank[level] >= logRank[logLevel];
+const log = (level: LogLevel, message: string): void => {
+  if (!shouldLog(level)) {
+    return;
+  }
+
+  if (level === "error") {
+    console.error(message);
+  } else if (level === "warn") {
+    console.warn(message);
+  } else {
+    console.log(message);
+  }
+};
 
 const port = Number(process.env.PORT) || 8080;
 const maxConnections = Number(process.env.MAX_CONNECTIONS) || 0;
@@ -80,6 +110,7 @@ server.on("close", () => {
 server.on("connection", (socket) => {
   if (maxConnections > 0 && sessions.size >= maxConnections) {
     socket.close(1013, "Server full");
+    log("warn", "Connection rejected: server full.");
     return;
   }
 
@@ -90,6 +121,7 @@ server.on("connection", (socket) => {
   };
   sessions.set(socket, session);
   game.addPlayer(session.id);
+  log("debug", `Player connected: ${session.id}. Total: ${sessions.size}.`);
 
   socket.on("message", (data) => {
     let parsed: ClientToServerMessage<unknown> | null = null;
@@ -107,7 +139,8 @@ server.on("connection", (socket) => {
   socket.on("close", () => {
     sessions.delete(socket);
     game.removePlayer(session.id);
+    log("debug", `Player disconnected: ${session.id}. Total: ${sessions.size}.`);
   });
 });
 
-console.log(`WebSocket server listening on ${port}`);
+log("info", `WebSocket server listening on ${port}`);
