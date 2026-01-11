@@ -22,13 +22,20 @@ export type StartRaceMessage = {
   type: 'race:start';
 };
 
+export type SessionHelloMessage = {
+  type: 'session:hello';
+  payload: {
+    browserName: string;
+  };
+};
+
 export type StateMessage<TState = unknown> = {
   type: 'state';
   payload: TState;
 };
 
 export type LobbyState<TTrack = unknown> = {
-  users: Array<{ id: string }>;
+  users: Array<{ id: string; name: string }>;
   tracks: TTrack[];
 };
 
@@ -71,7 +78,8 @@ export type ClientToServerMessage<TPayload = unknown> =
   | InputMessage<TPayload>
   | CreateTrackMessage
   | JoinTrackMessage
-  | StartRaceMessage;
+  | StartRaceMessage
+  | SessionHelloMessage;
 
 export type ServerToClientMessage<TState = unknown, TTrack = unknown> =
   | StateMessage<TState>

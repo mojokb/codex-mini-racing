@@ -179,7 +179,42 @@ export class MultiplayerClient {
     console.info('[multiplayer] connected', this.url);
     this.reconnectDelayMs = 1000;
     this.updateStatus('connected');
+    this.sendSessionHello();
   };
+
+  /**
+   * 브라우저명을 서버에 전달합니다.
+   */
+  private sendSessionHello(): void {
+    const message: ClientToServerMessage = {
+      type: 'session:hello',
+      payload: {
+        browserName: this.getBrowserName(),
+      },
+    };
+    this.sendMessage(message);
+  }
+
+  /**
+   * 현재 브라우저명을 추정합니다.
+   * @returns 브라우저명 문자열.
+   */
+  private getBrowserName(): string {
+    const userAgent = navigator.userAgent;
+    if (userAgent.includes('Edg/')) {
+      return 'Edge';
+    }
+    if (userAgent.includes('Chrome/')) {
+      return 'Chrome';
+    }
+    if (userAgent.includes('Firefox/')) {
+      return 'Firefox';
+    }
+    if (userAgent.includes('Safari/')) {
+      return 'Safari';
+    }
+    return 'Browser';
+  }
 
   private handleMessage = (event: MessageEvent<string>): void => {
     let parsed: ServerMessage | null = null;

@@ -4,7 +4,7 @@ import type {
   LobbyState,
   ServerToClientMessage,
 } from "./shared/messages";
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { Game, type InputState } from "./game/Game";
 import dotenv from "dotenv";
 
@@ -44,6 +44,7 @@ const server = new WebSocketServer({ port });
 const game = new Game();
 type Session = {
   id: string;
+  name: string;
   connectedAt: number;
   socket: WebSocket;
   trackId: string | null;
@@ -53,7 +54,7 @@ const sessions = new Map<WebSocket, Session>();
 const trackCapacity = 2;
 type TrackRoom = {
   id: string;
-  players: string[];
+  players: Array<{ id: string; name: string }>;
   capacity: number;
   hostId: string;
 };
@@ -119,6 +120,31 @@ const isJoinTrackMessage = (
 };
 
 /**
+ * 세션 초기 인사 메시지 여부를 확인합니다.
+ * @param value 확인할 값.
+ * @returns 세션 인사 메시지면 true.
+ */
+const isSessionHelloMessage = (
+  value: unknown,
+): value is ClientToServerMessage<{ browserName: string }> => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as { type?: unknown; payload?: unknown };
+  if (candidate.type !== "session:hello") {
+    return false;
+  }
+
+  if (!candidate.payload || typeof candidate.payload !== "object") {
+    return false;
+  }
+
+  const payload = candidate.payload as { browserName?: unknown };
+  return typeof payload.browserName === "string";
+};
+
+/**
  * 레이스 시작 메시지 여부를 확인합니다.
  * @param value 확인할 값.
  * @returns 레이스 시작 메시지면 true.
@@ -146,6 +172,17 @@ const isInputState = (value: unknown): value is InputState => {
     typeof candidate.handbrake === "boolean" &&
     typeof candidate.reset === "boolean"
   );
+};
+
+/**
+ * 브라우저 이름과 4자리 suffix로 사용자명을 생성합니다.
+ * @param browserName 클라이언트가 전달한 브라우저명.
+ * @returns 생성된 사용자명.
+ */
+const buildPlayerName = (browserName: string): string => {
+  const baseName = browserName.trim() || "Player";
+  const suffix = randomInt(0, 10000).toString().padStart(4, "0");
+  return `${baseName}-${suffix}`;
 };
 
 /**
@@ -179,7 +216,10 @@ const broadcastState = (): void => {
 };
 
 const buildLobbyState = (): LobbyState<TrackRoom> => ({
-  users: Array.from(sessions.values()).map((session) => ({ id: session.id })),
+  users: Array.from(sessions.values()).map((session) => ({
+    id: session.id,
+    name: session.name,
+  })),
   tracks: Array.from(tracks.values()),
 });
 
@@ -206,8 +246,8 @@ const sendTrackState = (trackId: string): void => {
     type: "track:state",
     payload: track,
   };
-  track.players.forEach((playerId) => {
-    const session = Array.from(sessions.values()).find((item) => item.id === playerId);
+  track.players.forEach((player) => {
+    const session = Array.from(sessions.values()).find((item) => item.id === player.id);
     if (!session || session.socket.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -225,8 +265,8 @@ const sendRaceCountdown = (track: TrackRoom, secondsLeft: number): void => {
     type: "race:countdown",
     payload: { secondsLeft },
   };
-  track.players.forEach((playerId) => {
-    const session = Array.from(sessions.values()).find((item) => item.id === playerId);
+  track.players.forEach((player) => {
+    const session = Array.from(sessions.values()).find((item) => item.id === player.id);
     if (!session || session.socket.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -242,8 +282,8 @@ const sendRaceStarted = (track: TrackRoom): void => {
   const response: ServerToClientMessage = {
     type: "race:started",
   };
-  track.players.forEach((playerId) => {
-    const session = Array.from(sessions.values()).find((item) => item.id === playerId);
+  track.players.forEach((player) => {
+    const session = Array.from(sessions.values()).find((item) => item.id === player.id);
     if (!session || session.socket.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -268,9 +308,9 @@ const leaveTrack = (session: Session): void => {
   }
   const track = tracks.get(session.trackId);
   if (track) {
-    track.players = track.players.filter((playerId) => playerId !== session.id);
+    track.players = track.players.filter((player) => player.id !== session.id);
     if (track.hostId === session.id) {
-      track.hostId = track.players[0] ?? track.hostId;
+      track.hostId = track.players[0]?.id ?? track.hostId;
     }
     if (track.players.length === 0) {
       const timer = countdownTimers.get(track.id);
@@ -299,7 +339,7 @@ const createTrackForSession = (session: Session, requestedId?: string): void => 
   leaveTrack(session);
   const track: TrackRoom = {
     id: trackId,
-    players: [session.id],
+    players: [{ id: session.id, name: session.name }],
     capacity: trackCapacity,
     hostId: session.id,
   };
@@ -321,7 +361,7 @@ const joinTrackForSession = (session: Session, trackId: string): void => {
   }
 
   leaveTrack(session);
-  track.players = [...track.players, session.id];
+  track.players = [...track.players, { id: session.id, name: session.name }];
   session.trackId = trackId;
   broadcastLobbyState();
   sendTrackState(trackId);
@@ -376,12 +416,13 @@ server.on("connection", (socket) => {
 
   const session: Session = {
     id: randomUUID(),
+    name: "Player",
     connectedAt: Date.now(),
     socket,
     trackId: null,
   };
   sessions.set(socket, session);
-  game.addPlayer(session.id);
+  game.addPlayer(session.id, session.name);
   log("debug", `Player connected: ${session.id}. Total: ${sessions.size}.`);
   sendSessionInfo(session);
   broadcastLobbyState();
@@ -396,6 +437,22 @@ server.on("connection", (socket) => {
 
     if (isInputMessage(parsed) && isInputState(parsed.payload)) {
       game.queueInput(session.id, parsed.sequence, parsed.payload);
+      return;
+    }
+
+    if (isSessionHelloMessage(parsed)) {
+      session.name = buildPlayerName(parsed.payload.browserName);
+      game.updatePlayerName(session.id, session.name);
+      if (session.trackId) {
+        const track = tracks.get(session.trackId);
+        if (track) {
+          track.players = track.players.map((player) =>
+            player.id === session.id ? { ...player, name: session.name } : player,
+          );
+          sendTrackState(track.id);
+        }
+      }
+      broadcastLobbyState();
       return;
     }
 
