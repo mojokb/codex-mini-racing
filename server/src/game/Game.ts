@@ -87,6 +87,19 @@ export class Game {
     });
   }
 
+  /**
+   * 플레이어 이름을 갱신합니다.
+   * @param id 플레이어 ID.
+   * @param name 갱신할 이름.
+   */
+  updatePlayerName(id: string, name: string): void {
+    const player = this.players.get(id);
+    if (!player) {
+      return;
+    }
+    player.name = name;
+  }
+
   removePlayer(id: string): void {
     this.players.delete(id);
   }

@@ -3,7 +3,7 @@ import type { MultiplayerClient } from '../net/MultiplayerClient';
 
 type TrackSummary = {
   id: string;
-  players?: string[];
+  players?: Array<{ id: string; name: string }>;
   capacity?: number;
   hostId?: string;
 };
@@ -173,11 +173,11 @@ export class LobbyPanel {
    * @param users 로비 사용자 목록.
    */
   private updateUsers(users: LobbyState<TrackSummary>['users']): void {
-    const entries = users.length > 0 ? users : [{ id: '대기 중...' }];
+    const entries = users.length > 0 ? users : [{ id: '대기 중...', name: '대기 중...' }];
     const fragment = document.createDocumentFragment();
     entries.forEach((user) => {
       const item = document.createElement('li');
-      item.textContent = user.id;
+      item.textContent = user.name;
       fragment.appendChild(item);
     });
     this.userList.replaceChildren(fragment);
@@ -229,7 +229,9 @@ export class LobbyPanel {
     if (!this.sessionId) {
       return;
     }
-    const activeTrack = tracks.find((track) => track.players?.includes(this.sessionId ?? ''));
+    const activeTrack = tracks.find((track) =>
+      track.players?.some((player) => player.id === (this.sessionId ?? '')),
+    );
     if (!activeTrack) {
       if (this.currentTrack) {
         this.currentTrack = null;
@@ -278,7 +280,9 @@ export class LobbyPanel {
     const playerCount = track.players?.length ?? 0;
     const capacity = typeof track.capacity === 'number' ? track.capacity : null;
     const countText = capacity === null ? `${playerCount}명` : `${playerCount}/${capacity}명`;
-    return `${track.id} (${countText})`;
+    const names = track.players?.map((player) => player.name).join(', ') ?? '';
+    const nameText = names ? ` - ${names}` : '';
+    return `${track.id} (${countText})${nameText}`;
   }
 
   /**
