@@ -55,8 +55,10 @@ type TrackRoom = {
   id: string;
   players: string[];
   capacity: number;
+  hostId: string;
 };
 const tracks = new Map<string, TrackRoom>();
+const countdownTimers = new Map<string, NodeJS.Timeout>();
 
 const isInputMessage = (value: unknown): value is ClientToServerMessage<unknown> => {
   if (!value || typeof value !== "object") {
@@ -116,6 +118,20 @@ const isJoinTrackMessage = (
   return typeof payload.trackId === "string";
 };
 
+/**
+ * 레이스 시작 메시지 여부를 확인합니다.
+ * @param value 확인할 값.
+ * @returns 레이스 시작 메시지면 true.
+ */
+const isStartRaceMessage = (value: unknown): value is ClientToServerMessage => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as { type?: unknown };
+  return candidate.type === "race:start";
+};
+
 const isInputState = (value: unknown): value is InputState => {
   if (!value || typeof value !== "object") {
     return false;
@@ -130,6 +146,21 @@ const isInputState = (value: unknown): value is InputState => {
     typeof candidate.handbrake === "boolean" &&
     typeof candidate.reset === "boolean"
   );
+};
+
+/**
+ * 세션 정보를 클라이언트에 전송합니다.
+ * @param session 대상 세션.
+ */
+const sendSessionInfo = (session: Session): void => {
+  if (session.socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+  const response: ServerToClientMessage = {
+    type: "session:info",
+    payload: { id: session.id },
+  };
+  session.socket.send(JSON.stringify(response));
 };
 
 const broadcastState = (): void => {
@@ -184,6 +215,42 @@ const sendTrackState = (trackId: string): void => {
   });
 };
 
+/**
+ * 레이스 카운트다운을 브로드캐스트합니다.
+ * @param track 대상 트랙.
+ * @param secondsLeft 남은 초.
+ */
+const sendRaceCountdown = (track: TrackRoom, secondsLeft: number): void => {
+  const response: ServerToClientMessage = {
+    type: "race:countdown",
+    payload: { secondsLeft },
+  };
+  track.players.forEach((playerId) => {
+    const session = Array.from(sessions.values()).find((item) => item.id === playerId);
+    if (!session || session.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    session.socket.send(JSON.stringify(response));
+  });
+};
+
+/**
+ * 레이스 시작 이벤트를 브로드캐스트합니다.
+ * @param track 대상 트랙.
+ */
+const sendRaceStarted = (track: TrackRoom): void => {
+  const response: ServerToClientMessage = {
+    type: "race:started",
+  };
+  track.players.forEach((playerId) => {
+    const session = Array.from(sessions.values()).find((item) => item.id === playerId);
+    if (!session || session.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    session.socket.send(JSON.stringify(response));
+  });
+};
+
 const sendError = (session: Session, message: string): void => {
   if (session.socket.readyState !== WebSocket.OPEN) {
     return;
@@ -202,7 +269,15 @@ const leaveTrack = (session: Session): void => {
   const track = tracks.get(session.trackId);
   if (track) {
     track.players = track.players.filter((playerId) => playerId !== session.id);
+    if (track.hostId === session.id) {
+      track.hostId = track.players[0] ?? track.hostId;
+    }
     if (track.players.length === 0) {
+      const timer = countdownTimers.get(track.id);
+      if (timer) {
+        clearInterval(timer);
+        countdownTimers.delete(track.id);
+      }
       tracks.delete(track.id);
     }
   }
@@ -226,6 +301,7 @@ const createTrackForSession = (session: Session, requestedId?: string): void => 
     id: trackId,
     players: [session.id],
     capacity: trackCapacity,
+    hostId: session.id,
   };
   tracks.set(trackId, track);
   session.trackId = trackId;
@@ -249,6 +325,30 @@ const joinTrackForSession = (session: Session, trackId: string): void => {
   session.trackId = trackId;
   broadcastLobbyState();
   sendTrackState(trackId);
+};
+
+/**
+ * 지정한 트랙에 레이스 카운트다운을 시작합니다.
+ * @param track 대상 트랙.
+ */
+const startRaceForTrack = (track: TrackRoom): void => {
+  if (countdownTimers.has(track.id)) {
+    return;
+  }
+
+  let secondsLeft = 3;
+  sendRaceCountdown(track, secondsLeft);
+  const timer = setInterval(() => {
+    secondsLeft -= 1;
+    if (secondsLeft > 0) {
+      sendRaceCountdown(track, secondsLeft);
+      return;
+    }
+    clearInterval(timer);
+    countdownTimers.delete(track.id);
+    sendRaceStarted(track);
+  }, 1000);
+  countdownTimers.set(track.id, timer);
 };
 
 const stateSyncRateHz = Number(process.env.STATE_SYNC_RATE_HZ) || 20;
@@ -283,6 +383,7 @@ server.on("connection", (socket) => {
   sessions.set(socket, session);
   game.addPlayer(session.id);
   log("debug", `Player connected: ${session.id}. Total: ${sessions.size}.`);
+  sendSessionInfo(session);
   broadcastLobbyState();
 
   socket.on("message", (data) => {
@@ -305,6 +406,18 @@ server.on("connection", (socket) => {
 
     if (isJoinTrackMessage(parsed)) {
       joinTrackForSession(session, parsed.payload.trackId);
+      return;
+    }
+
+    if (isStartRaceMessage(parsed)) {
+      if (!session.trackId) {
+        return;
+      }
+      const track = tracks.get(session.trackId);
+      if (!track || track.hostId !== session.id) {
+        return;
+      }
+      startRaceForTrack(track);
     }
   });
 
