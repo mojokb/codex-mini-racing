@@ -8,6 +8,7 @@ type TrackStateCallback = (state: unknown) => void;
 type SessionCallback = (id: string) => void;
 type RaceCountdownCallback = (secondsLeft: number) => void;
 type RaceStartedCallback = () => void;
+type RaceFinishedCallback = (winner: { id: string; name: string } | null) => void;
 
 type ServerMessage = ServerToClientMessage<unknown>;
 
@@ -21,6 +22,7 @@ export class MultiplayerClient {
   private sessionCallback: SessionCallback = () => undefined;
   private raceCountdownCallback: RaceCountdownCallback = () => undefined;
   private raceStartedCallback: RaceStartedCallback = () => undefined;
+  private raceFinishedCallback: RaceFinishedCallback = () => undefined;
   private errorCallback: (message: string) => void = () => undefined;
   private status: ConnectionStatus = 'idle';
   private reconnectTimer: number | null = null;
@@ -79,6 +81,17 @@ export class MultiplayerClient {
     return this.sendMessage(message);
   }
 
+  /**
+   * 레이스 재시작을 요청합니다.
+   * @returns 전송 성공 여부.
+   */
+  sendRestartRace(): boolean {
+    const message: ClientToServerMessage = {
+      type: 'race:restart',
+    };
+    return this.sendMessage(message);
+  }
+
   onState(callback: StateCallback): void {
     this.stateCallback = callback;
   }
@@ -121,6 +134,14 @@ export class MultiplayerClient {
    */
   onRaceStarted(callback: RaceStartedCallback): void {
     this.raceStartedCallback = callback;
+  }
+
+  /**
+   * 레이스 종료 수신 콜백을 등록합니다.
+   * @param callback 승자 정보를 처리할 함수.
+   */
+  onRaceFinished(callback: RaceFinishedCallback): void {
+    this.raceFinishedCallback = callback;
   }
 
   /**
@@ -255,6 +276,11 @@ export class MultiplayerClient {
 
     if (parsed?.type === 'race:started') {
       this.raceStartedCallback();
+      return;
+    }
+
+    if (parsed?.type === 'race:finished') {
+      this.raceFinishedCallback(parsed.payload.winner ?? null);
       return;
     }
 

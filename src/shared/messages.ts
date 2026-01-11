@@ -67,6 +67,17 @@ export type RaceStartedMessage = {
   type: 'race:started';
 };
 
+export type RaceFinishedMessage = {
+  type: 'race:finished';
+  payload: {
+    winner: { id: string; name: string } | null;
+  };
+};
+
+export type RestartRaceMessage = {
+  type: 'race:restart';
+};
+
 export type ErrorMessage = {
   type: 'error';
   payload: {
@@ -79,6 +90,7 @@ export type ClientToServerMessage<TPayload = unknown> =
   | CreateTrackMessage
   | JoinTrackMessage
   | StartRaceMessage
+  | RestartRaceMessage
   | SessionHelloMessage;
 
 export type ServerToClientMessage<TState = unknown, TTrack = unknown> =
@@ -88,6 +100,7 @@ export type ServerToClientMessage<TState = unknown, TTrack = unknown> =
   | SessionInfoMessage
   | RaceCountdownMessage
   | RaceStartedMessage
+  | RaceFinishedMessage
   | ErrorMessage;
 
 export type MultiplayerMessage<TPayload = unknown, TState = unknown> =

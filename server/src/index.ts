@@ -60,6 +60,7 @@ type TrackRoom = {
 };
 const tracks = new Map<string, TrackRoom>();
 const countdownTimers = new Map<string, NodeJS.Timeout>();
+let lastWinnerId: string | null = null;
 
 const isInputMessage = (value: unknown): value is ClientToServerMessage<unknown> => {
   if (!value || typeof value !== "object") {
@@ -156,6 +157,20 @@ const isStartRaceMessage = (value: unknown): value is ClientToServerMessage => {
 
   const candidate = value as { type?: unknown };
   return candidate.type === "race:start";
+};
+
+/**
+ * 레이스 재시작 메시지 여부를 확인합니다.
+ * @param value 확인할 값.
+ * @returns 레이스 재시작 메시지면 true.
+ */
+const isRestartRaceMessage = (value: unknown): value is ClientToServerMessage => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as { type?: unknown };
+  return candidate.type === "race:restart";
 };
 
 const isInputState = (value: unknown): value is InputState => {
@@ -291,6 +306,28 @@ const sendRaceStarted = (track: TrackRoom): void => {
   });
 };
 
+/**
+ * 레이스 종료 이벤트를 브로드캐스트합니다.
+ * @param track 대상 트랙.
+ * @param winner 승자 정보.
+ */
+const sendRaceFinished = (
+  track: TrackRoom,
+  winner: { id: string; name: string } | null,
+): void => {
+  const response: ServerToClientMessage = {
+    type: "race:finished",
+    payload: { winner },
+  };
+  track.players.forEach((player) => {
+    const session = Array.from(sessions.values()).find((item) => item.id === player.id);
+    if (!session || session.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    session.socket.send(JSON.stringify(response));
+  });
+};
+
 const sendError = (session: Session, message: string): void => {
   if (session.socket.readyState !== WebSocket.OPEN) {
     return;
@@ -300,6 +337,20 @@ const sendError = (session: Session, message: string): void => {
     payload: { message },
   };
   session.socket.send(JSON.stringify(response));
+};
+
+/**
+ * 플레이어가 속한 트랙을 찾습니다.
+ * @param playerId 플레이어 ID.
+ * @returns 찾은 트랙 또는 null.
+ */
+const findTrackByPlayerId = (playerId: string): TrackRoom | null => {
+  for (const track of tracks.values()) {
+    if (track.players.some((player) => player.id === playerId)) {
+      return track;
+    }
+  }
+  return null;
 };
 
 const leaveTrack = (session: Session): void => {
@@ -391,6 +442,16 @@ const startRaceForTrack = (track: TrackRoom): void => {
   countdownTimers.set(track.id, timer);
 };
 
+/**
+ * 레이스 상태를 초기화하고 카운트다운을 시작합니다.
+ * @param track 대상 트랙.
+ */
+const restartRaceForTrack = (track: TrackRoom): void => {
+  game.resetRace();
+  lastWinnerId = null;
+  startRaceForTrack(track);
+};
+
 const stateSyncRateHz = Number(process.env.STATE_SYNC_RATE_HZ) || 20;
 const stateSyncIntervalTicks = Math.max(1, Math.round(Game.TICK_RATE / stateSyncRateHz));
 const tickMs = 1000 / Game.TICK_RATE;
@@ -398,6 +459,15 @@ let tickCount = 0;
 const tickInterval = setInterval(() => {
   game.step(Game.STEP);
   tickCount += 1;
+  const { raceFinished, winner } = game.getRaceResult();
+  if (raceFinished && winner && winner.id !== lastWinnerId) {
+    const track = findTrackByPlayerId(winner.id);
+    const broadcastTrack = track ?? Array.from(tracks.values())[0];
+    if (broadcastTrack) {
+      sendRaceFinished(broadcastTrack, winner);
+    }
+    lastWinnerId = winner.id;
+  }
   if (tickCount % stateSyncIntervalTicks === 0) {
     broadcastState();
   }
@@ -475,6 +545,18 @@ server.on("connection", (socket) => {
         return;
       }
       startRaceForTrack(track);
+      return;
+    }
+
+    if (isRestartRaceMessage(parsed)) {
+      if (!session.trackId) {
+        return;
+      }
+      const track = tracks.get(session.trackId);
+      if (!track || track.hostId !== session.id) {
+        return;
+      }
+      restartRaceForTrack(track);
     }
   });
 
