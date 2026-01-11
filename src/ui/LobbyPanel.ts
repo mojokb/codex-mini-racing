@@ -17,10 +17,12 @@ export class LobbyPanel {
   private errorText: HTMLDivElement;
   private trackStatusText: HTMLDivElement;
   private startButton: HTMLButtonElement;
+  private restartButton: HTMLButtonElement;
   private raceStatusText: HTMLDivElement;
   private sessionId: string | null = null;
   private currentTrack: TrackSummary | null = null;
   private countdownActive = false;
+  private raceFinished = false;
 
   /**
    * LobbyPanel 인스턴스를 생성합니다.
@@ -68,8 +70,16 @@ export class LobbyPanel {
     this.startButton.addEventListener('click', () => {
       this.client.sendStartRace();
     });
+    this.restartButton = document.createElement('button');
+    this.restartButton.type = 'button';
+    this.restartButton.textContent = '재경기';
+    this.restartButton.hidden = true;
+    this.restartButton.addEventListener('click', () => {
+      this.client.sendRestartRace();
+    });
     trackStatusRow.appendChild(this.trackStatusText);
     trackStatusRow.appendChild(this.startButton);
+    trackStatusRow.appendChild(this.restartButton);
 
     const userSection = document.createElement('div');
     const userTitle = document.createElement('div');
@@ -108,6 +118,7 @@ export class LobbyPanel {
     this.client.onTrackState(this.handleTrackState);
     this.client.onRaceCountdown(this.handleRaceCountdown);
     this.client.onRaceStarted(this.handleRaceStarted);
+    this.client.onRaceFinished(this.handleRaceFinished);
     this.client.onSessionInfo(this.handleSessionInfo);
     this.client.onError(this.handleError);
   }
@@ -147,6 +158,7 @@ export class LobbyPanel {
    */
   private handleRaceCountdown = (secondsLeft: number): void => {
     this.countdownActive = true;
+    this.raceFinished = false;
     this.raceStatusText.textContent = `카운트다운: ${secondsLeft}`;
     this.updateStartButtonState();
   };
@@ -156,7 +168,21 @@ export class LobbyPanel {
    */
   private handleRaceStarted = (): void => {
     this.countdownActive = false;
+    this.raceFinished = false;
     this.raceStatusText.textContent = '레이스 시작!';
+    this.updateStartButtonState();
+  };
+
+  /**
+   * 레이스 종료 이벤트를 처리합니다.
+   * @param winner 승자 정보.
+   */
+  private handleRaceFinished = (winner: { id: string; name: string } | null): void => {
+    this.countdownActive = false;
+    this.raceFinished = true;
+    this.raceStatusText.textContent = winner
+      ? `레이스 종료 - 승자: ${winner.name}`
+      : '레이스 종료';
     this.updateStartButtonState();
   };
 
@@ -236,6 +262,7 @@ export class LobbyPanel {
       if (this.currentTrack) {
         this.currentTrack = null;
         this.countdownActive = false;
+        this.raceFinished = false;
         this.raceStatusText.textContent = '';
         this.updateTrackStatus();
       }
@@ -244,6 +271,7 @@ export class LobbyPanel {
     if (this.currentTrack?.id !== activeTrack.id) {
       this.currentTrack = activeTrack;
       this.countdownActive = false;
+      this.raceFinished = false;
       this.raceStatusText.textContent = '';
       this.updateTrackStatus();
     }
@@ -267,8 +295,10 @@ export class LobbyPanel {
    */
   private updateStartButtonState(): void {
     const isHost = Boolean(this.currentTrack && this.sessionId && this.currentTrack.hostId === this.sessionId);
-    this.startButton.hidden = !isHost;
+    this.startButton.hidden = !isHost || this.raceFinished;
     this.startButton.disabled = !isHost || this.countdownActive;
+    this.restartButton.hidden = !isHost || !this.raceFinished;
+    this.restartButton.disabled = !isHost || this.countdownActive;
   }
 
   /**

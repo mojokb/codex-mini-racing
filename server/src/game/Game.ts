@@ -146,6 +146,35 @@ export class Game {
     };
   }
 
+  /**
+   * 레이스 종료 여부와 승자 정보를 반환합니다.
+   * @returns 레이스 결과 데이터.
+   */
+  getRaceResult(): Pick<GameState, 'raceFinished' | 'winner'> {
+    return { raceFinished: this.raceFinished, winner: this.winner };
+  }
+
+  /**
+   * 레이스 상태를 초기화합니다.
+   */
+  resetRace(): void {
+    this.raceFinished = false;
+    this.winner = null;
+    this.tick = 0;
+    this.players.forEach((player) => {
+      player.position = { ...player.spawn };
+      player.heading = 0;
+      player.speed = 0;
+      player.lap = 0;
+      player.lastProcessedInputSequence = -1;
+      player.inputQueue.clear();
+      player.lastInput = { ...DEFAULT_INPUT };
+      player.nextCheckpoint = 1;
+      player.onCheckpoint = false;
+      player.lapActive = false;
+    });
+  }
+
   private consumeNextInput(player: PlayerInternal): void {
     const candidateSequences = Array.from(player.inputQueue.keys())
       .filter((sequence) => sequence > player.lastProcessedInputSequence)
