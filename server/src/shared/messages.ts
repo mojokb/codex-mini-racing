@@ -18,6 +18,10 @@ export type JoinTrackMessage = {
   };
 };
 
+export type StartRaceMessage = {
+  type: 'race:start';
+};
+
 export type StateMessage<TState = unknown> = {
   type: 'state';
   payload: TState;
@@ -38,6 +42,24 @@ export type TrackStateMessage<TTrack = unknown> = {
   payload: TTrack;
 };
 
+export type SessionInfoMessage = {
+  type: 'session:info';
+  payload: {
+    id: string;
+  };
+};
+
+export type RaceCountdownMessage = {
+  type: 'race:countdown';
+  payload: {
+    secondsLeft: number;
+  };
+};
+
+export type RaceStartedMessage = {
+  type: 'race:started';
+};
+
 export type ErrorMessage = {
   type: 'error';
   payload: {
@@ -48,10 +70,14 @@ export type ErrorMessage = {
 export type ClientToServerMessage<TPayload = unknown> =
   | InputMessage<TPayload>
   | CreateTrackMessage
-  | JoinTrackMessage;
+  | JoinTrackMessage
+  | StartRaceMessage;
 
 export type ServerToClientMessage<TState = unknown, TTrack = unknown> =
   | StateMessage<TState>
   | LobbyStateMessage<TTrack>
   | TrackStateMessage<TTrack>
+  | SessionInfoMessage
+  | RaceCountdownMessage
+  | RaceStartedMessage
   | ErrorMessage;

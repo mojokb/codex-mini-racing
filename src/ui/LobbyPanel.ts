@@ -5,6 +5,7 @@ type TrackSummary = {
   id: string;
   players?: string[];
   capacity?: number;
+  hostId?: string;
 };
 
 /**
@@ -14,6 +15,12 @@ export class LobbyPanel {
   private userList: HTMLUListElement;
   private trackList: HTMLUListElement;
   private errorText: HTMLDivElement;
+  private trackStatusText: HTMLDivElement;
+  private startButton: HTMLButtonElement;
+  private raceStatusText: HTMLDivElement;
+  private sessionId: string | null = null;
+  private currentTrack: TrackSummary | null = null;
+  private countdownActive = false;
 
   /**
    * LobbyPanel 인스턴스를 생성합니다.
@@ -47,6 +54,23 @@ export class LobbyPanel {
     headerRow.appendChild(title);
     headerRow.appendChild(createButton);
 
+    const trackStatusRow = document.createElement('div');
+    trackStatusRow.style.display = 'flex';
+    trackStatusRow.style.justifyContent = 'space-between';
+    trackStatusRow.style.alignItems = 'center';
+    trackStatusRow.style.gap = '8px';
+    this.trackStatusText = document.createElement('div');
+    this.trackStatusText.textContent = '현재 트랙: -';
+    this.startButton = document.createElement('button');
+    this.startButton.type = 'button';
+    this.startButton.textContent = 'Start';
+    this.startButton.hidden = true;
+    this.startButton.addEventListener('click', () => {
+      this.client.sendStartRace();
+    });
+    trackStatusRow.appendChild(this.trackStatusText);
+    trackStatusRow.appendChild(this.startButton);
+
     const userSection = document.createElement('div');
     const userTitle = document.createElement('div');
     userTitle.textContent = '사용자';
@@ -68,14 +92,23 @@ export class LobbyPanel {
     this.errorText = document.createElement('div');
     this.errorText.style.color = '#ff8a80';
 
+    this.raceStatusText = document.createElement('div');
+    this.raceStatusText.style.color = '#ffe082';
+
     wrapper.appendChild(headerRow);
+    wrapper.appendChild(trackStatusRow);
     wrapper.appendChild(userSection);
     wrapper.appendChild(trackSection);
+    wrapper.appendChild(this.raceStatusText);
     wrapper.appendChild(this.errorText);
 
     document.body.appendChild(wrapper);
 
     this.client.onLobbyState(this.handleLobbyState);
+    this.client.onTrackState(this.handleTrackState);
+    this.client.onRaceCountdown(this.handleRaceCountdown);
+    this.client.onRaceStarted(this.handleRaceStarted);
+    this.client.onSessionInfo(this.handleSessionInfo);
     this.client.onError(this.handleError);
   }
 
@@ -86,6 +119,45 @@ export class LobbyPanel {
   private handleLobbyState = (state: LobbyState<TrackSummary>): void => {
     this.updateUsers(state.users);
     this.updateTracks(state.tracks);
+    this.updateCurrentTrackFromLobby(state.tracks);
+    this.updateStartButtonState();
+  };
+
+  /**
+   * 트랙 상태 업데이트를 처리합니다.
+   * @param track 트랙 상태 데이터.
+   */
+  private handleTrackState = (track: TrackSummary): void => {
+    this.currentTrack = track;
+    this.updateTrackStatus();
+  };
+
+  /**
+   * 세션 정보를 처리합니다.
+   * @param id 세션 ID.
+   */
+  private handleSessionInfo = (id: string): void => {
+    this.sessionId = id;
+    this.updateStartButtonState();
+  };
+
+  /**
+   * 레이스 카운트다운 이벤트를 처리합니다.
+   * @param secondsLeft 남은 초.
+   */
+  private handleRaceCountdown = (secondsLeft: number): void => {
+    this.countdownActive = true;
+    this.raceStatusText.textContent = `카운트다운: ${secondsLeft}`;
+    this.updateStartButtonState();
+  };
+
+  /**
+   * 레이스 시작 이벤트를 처리합니다.
+   */
+  private handleRaceStarted = (): void => {
+    this.countdownActive = false;
+    this.raceStatusText.textContent = '레이스 시작!';
+    this.updateStartButtonState();
   };
 
   /**
@@ -147,6 +219,54 @@ export class LobbyPanel {
     });
 
     this.trackList.replaceChildren(fragment);
+  }
+
+  /**
+   * 로비 정보로 현재 트랙 정보를 갱신합니다.
+   * @param tracks 로비 트랙 목록.
+   */
+  private updateCurrentTrackFromLobby(tracks: TrackSummary[]): void {
+    if (!this.sessionId) {
+      return;
+    }
+    const activeTrack = tracks.find((track) => track.players?.includes(this.sessionId ?? ''));
+    if (!activeTrack) {
+      if (this.currentTrack) {
+        this.currentTrack = null;
+        this.countdownActive = false;
+        this.raceStatusText.textContent = '';
+        this.updateTrackStatus();
+      }
+      return;
+    }
+    if (this.currentTrack?.id !== activeTrack.id) {
+      this.currentTrack = activeTrack;
+      this.countdownActive = false;
+      this.raceStatusText.textContent = '';
+      this.updateTrackStatus();
+    }
+  }
+
+  /**
+   * 현재 트랙 표시를 갱신합니다.
+   */
+  private updateTrackStatus(): void {
+    if (!this.currentTrack) {
+      this.trackStatusText.textContent = '현재 트랙: -';
+      this.startButton.hidden = true;
+      return;
+    }
+    this.trackStatusText.textContent = `현재 트랙: ${this.currentTrack.id}`;
+    this.updateStartButtonState();
+  }
+
+  /**
+   * Start 버튼 표시 여부 및 활성 상태를 갱신합니다.
+   */
+  private updateStartButtonState(): void {
+    const isHost = Boolean(this.currentTrack && this.sessionId && this.currentTrack.hostId === this.sessionId);
+    this.startButton.hidden = !isHost;
+    this.startButton.disabled = !isHost || this.countdownActive;
   }
 
   /**

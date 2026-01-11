@@ -4,6 +4,10 @@ import type { ClientToServerMessage, LobbyState, ServerToClientMessage } from '.
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'failed' | 'in-game';
 
 type StateCallback = (state: unknown) => void;
+type TrackStateCallback = (state: unknown) => void;
+type SessionCallback = (id: string) => void;
+type RaceCountdownCallback = (secondsLeft: number) => void;
+type RaceStartedCallback = () => void;
 
 type ServerMessage = ServerToClientMessage<unknown>;
 
@@ -13,11 +17,16 @@ export class MultiplayerClient {
   private stateCallback: StateCallback = () => undefined;
   private statusCallback: (status: ConnectionStatus) => void = () => undefined;
   private lobbyStateCallback: (state: LobbyState<unknown>) => void = () => undefined;
+  private trackStateCallback: TrackStateCallback = () => undefined;
+  private sessionCallback: SessionCallback = () => undefined;
+  private raceCountdownCallback: RaceCountdownCallback = () => undefined;
+  private raceStartedCallback: RaceStartedCallback = () => undefined;
   private errorCallback: (message: string) => void = () => undefined;
   private status: ConnectionStatus = 'idle';
   private reconnectTimer: number | null = null;
   private reconnectDelayMs = 1000;
   private readonly maxReconnectDelayMs = 8000;
+  private sessionId: string | null = null;
 
   connect(url: string): void {
     this.url = url;
@@ -59,6 +68,17 @@ export class MultiplayerClient {
     return this.sendMessage(message);
   }
 
+  /**
+   * 레이스 시작을 요청합니다.
+   * @returns 전송 성공 여부.
+   */
+  sendStartRace(): boolean {
+    const message: ClientToServerMessage = {
+      type: 'race:start',
+    };
+    return this.sendMessage(message);
+  }
+
   onState(callback: StateCallback): void {
     this.stateCallback = callback;
   }
@@ -72,6 +92,38 @@ export class MultiplayerClient {
   }
 
   /**
+   * 트랙 상태 수신 콜백을 등록합니다.
+   * @param callback 트랙 상태를 처리할 함수.
+   */
+  onTrackState(callback: TrackStateCallback): void {
+    this.trackStateCallback = callback;
+  }
+
+  /**
+   * 세션 정보 수신 콜백을 등록합니다.
+   * @param callback 세션 ID를 처리할 함수.
+   */
+  onSessionInfo(callback: SessionCallback): void {
+    this.sessionCallback = callback;
+  }
+
+  /**
+   * 레이스 카운트다운 수신 콜백을 등록합니다.
+   * @param callback 남은 초를 처리할 함수.
+   */
+  onRaceCountdown(callback: RaceCountdownCallback): void {
+    this.raceCountdownCallback = callback;
+  }
+
+  /**
+   * 레이스 시작 수신 콜백을 등록합니다.
+   * @param callback 시작 이벤트를 처리할 함수.
+   */
+  onRaceStarted(callback: RaceStartedCallback): void {
+    this.raceStartedCallback = callback;
+  }
+
+  /**
    * 에러 메시지 수신 콜백을 등록합니다.
    * @param callback 에러 문자열을 처리할 함수.
    */
@@ -82,6 +134,14 @@ export class MultiplayerClient {
   onStatus(callback: (status: ConnectionStatus) => void): void {
     this.statusCallback = callback;
     callback(this.status);
+  }
+
+  /**
+   * 세션 ID를 반환합니다.
+   * @returns 세션 ID.
+   */
+  getSessionId(): string | null {
+    return this.sessionId;
   }
 
   /**
@@ -139,6 +199,27 @@ export class MultiplayerClient {
 
     if (parsed?.type === 'lobby:state') {
       this.lobbyStateCallback(parsed.payload);
+      return;
+    }
+
+    if (parsed?.type === 'track:state') {
+      this.trackStateCallback(parsed.payload);
+      return;
+    }
+
+    if (parsed?.type === 'session:info') {
+      this.sessionId = parsed.payload.id;
+      this.sessionCallback(parsed.payload.id);
+      return;
+    }
+
+    if (parsed?.type === 'race:countdown') {
+      this.raceCountdownCallback(parsed.payload.secondsLeft);
+      return;
+    }
+
+    if (parsed?.type === 'race:started') {
+      this.raceStartedCallback();
       return;
     }
 
