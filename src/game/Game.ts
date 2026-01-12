@@ -39,6 +39,8 @@ export class Game {
   private lapActive = false;
   private lastAckedInputSequence = -1;
   private latestServerState: unknown = null;
+  private running = false;
+  private frameId: number | null = null;
 
   private static readonly STEP = MultiplayerSpec.tickSeconds;
 
@@ -65,8 +67,40 @@ export class Game {
     }
   }
 
+  /**
+   * 게임 루프를 시작합니다.
+   */
   start(): void {
-    requestAnimationFrame(this.frame);
+    if (this.running) {
+      return;
+    }
+    this.running = true;
+    this.lastTime = 0;
+    this.frameId = requestAnimationFrame(this.frame);
+  }
+
+  /**
+   * 게임 루프를 정지합니다.
+   */
+  stop(): void {
+    if (!this.running) {
+      return;
+    }
+    this.running = false;
+    if (this.frameId !== null) {
+      cancelAnimationFrame(this.frameId);
+      this.frameId = null;
+    }
+    this.lastTime = 0;
+    this.accumulator = 0;
+  }
+
+  /**
+   * 캔버스 표시 여부를 설정합니다.
+   * @param isVisible 표시 여부.
+   */
+  setVisible(isVisible: boolean): void {
+    this.canvas.style.display = isVisible ? 'block' : 'none';
   }
 
   private resetLap(timestamp: number): void {
@@ -78,6 +112,9 @@ export class Game {
   }
 
   private frame = (timestamp: number): void => {
+    if (!this.running) {
+      return;
+    }
     const delta = this.lastTime === 0 ? 0 : Math.min(0.05, (timestamp - this.lastTime) / 1000);
     this.lastTime = timestamp;
     this.accumulator += delta;
@@ -91,7 +128,7 @@ export class Game {
     }
 
     this.render();
-    requestAnimationFrame(this.frame);
+    this.frameId = requestAnimationFrame(this.frame);
   };
 
   private update(dt: number, timestamp: number): void {

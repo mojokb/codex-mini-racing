@@ -3,6 +3,8 @@ import { MultiplayerClient } from './net/MultiplayerClient';
 import { ConnectionPanel } from './ui/ConnectionPanel';
 import { LobbyPanel } from './ui/LobbyPanel';
 
+type Screen = 'lobby' | 'track';
+
 const LOGICAL_WIDTH = 320;
 const LOGICAL_HEIGHT = 240;
 const SCALE = 3;
@@ -22,10 +24,34 @@ ctx.imageSmoothingEnabled = false;
 
 const multiplayerClient = new MultiplayerClient();
 new ConnectionPanel(multiplayerClient, DEFAULT_SERVER_URL);
-new LobbyPanel(multiplayerClient);
+const lobbyPanel = new LobbyPanel(multiplayerClient, (nextScreen) => {
+  setScreen(nextScreen);
+});
 multiplayerClient.connect(DEFAULT_SERVER_URL);
 
 document.body.appendChild(canvas);
 
 const game = new Game(canvas, multiplayerClient);
-game.start();
+
+let currentScreen: Screen = 'track';
+
+/**
+ * 화면 상태에 따라 로비/게임 표시를 전환합니다.
+ * @param nextScreen 전환할 화면.
+ */
+function setScreen(nextScreen: Screen): void {
+  if (currentScreen === nextScreen) {
+    return;
+  }
+  currentScreen = nextScreen;
+  const isLobby = nextScreen === 'lobby';
+  lobbyPanel.setVisible(isLobby);
+  game.setVisible(!isLobby);
+  if (isLobby) {
+    game.stop();
+    return;
+  }
+  game.start();
+}
+
+setScreen('lobby');
