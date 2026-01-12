@@ -9,6 +9,7 @@ export type NetworkClient = {
   connect: (url: string) => void;
   sendInput: (payload: InputSnapshot) => boolean;
   onState: (callback: (state: unknown) => void) => void;
+  getSessionId?: () => string | null;
 };
 
 export type PlayerId = string;
@@ -234,6 +235,11 @@ export class Game {
 
   private handleNetworkState = (state: unknown): void => {
     this.latestServerState = state;
+    this.syncLocalPlayerId();
+    const players = this.readPlayerStates(state);
+    if (players.length > 0) {
+      this.syncCars(players);
+    }
     const lastProcessedInputSequence = this.readLastProcessedSequence(state);
     if (lastProcessedInputSequence === null) {
       return;
@@ -256,6 +262,65 @@ export class Game {
 
     const candidate = (state as { lastProcessedInputSequence?: unknown }).lastProcessedInputSequence;
     return typeof candidate === 'number' ? candidate : null;
+  }
+
+  /**
+   * 서버 상태에서 플레이어 목록을 추출합니다.
+   * @param state 서버 상태 데이터.
+   * @returns 플레이어 상태 배열.
+   */
+  private readPlayerStates(state: unknown): Array<{
+    id: string;
+    position: { x: number; y: number };
+    heading: number;
+    speed: number;
+  }> {
+    if (!state || typeof state !== 'object') {
+      return [];
+    }
+
+    const payload = state as { players?: unknown };
+    if (!Array.isArray(payload.players)) {
+      return [];
+    }
+
+    return payload.players.reduce<Array<{
+      id: string;
+      position: { x: number; y: number };
+      heading: number;
+      speed: number;
+    }>>((list, entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return list;
+      }
+      const record = entry as {
+        id?: unknown;
+        position?: unknown;
+        heading?: unknown;
+        speed?: unknown;
+      };
+      if (typeof record.id !== 'string') {
+        return list;
+      }
+      if (
+        !record.position ||
+        typeof record.position !== 'object' ||
+        typeof (record.position as { x?: unknown }).x !== 'number' ||
+        typeof (record.position as { y?: unknown }).y !== 'number'
+      ) {
+        return list;
+      }
+      if (typeof record.heading !== 'number' || typeof record.speed !== 'number') {
+        return list;
+      }
+      list.push({
+        id: record.id,
+        position: record.position as { x: number; y: number },
+        heading: record.heading,
+        speed: record.speed
+      });
+      return list;
+    }, []);
   }
 
   private readPlayerSummaries(state: unknown): PlayerSummary[] {
@@ -297,6 +362,75 @@ export class Game {
 
   private getLocalCar(): Car | undefined {
     return this.cars.get(this.localPlayerId);
+  }
+
+  /**
+   * 세션 ID 기준으로 로컬 플레이어 ID를 동기화합니다.
+   */
+  private syncLocalPlayerId(): void {
+    const sessionId = this.networkClient?.getSessionId?.() ?? null;
+    if (!sessionId || sessionId === this.localPlayerId) {
+      return;
+    }
+    const localCar = this.cars.get(this.localPlayerId);
+    if (localCar) {
+      this.cars.delete(this.localPlayerId);
+      this.cars.set(sessionId, localCar);
+    }
+    this.localPlayerId = sessionId;
+  }
+
+  /**
+   * 서버 플레이어 상태에 맞춰 차량 정보를 동기화합니다.
+   * @param players 서버에서 전달된 플레이어 상태 배열.
+   */
+  private syncCars(
+    players: Array<{
+      id: string;
+      position: { x: number; y: number };
+      heading: number;
+      speed: number;
+    }>
+  ): void {
+    const activeIds = new Set(players.map((player) => player.id));
+    players.forEach((player) => {
+      const car = this.cars.get(player.id);
+      if (car) {
+        this.applyServerState(car, player);
+        return;
+      }
+      const palette = this.getPaletteForPlayer(player.id);
+      const newCar = new Car(player.position, palette);
+      this.applyServerState(newCar, player);
+      this.cars.set(player.id, newCar);
+    });
+
+    this.cars.forEach((_car, id) => {
+      if (id !== this.localPlayerId && !activeIds.has(id)) {
+        this.cars.delete(id);
+      }
+    });
+  }
+
+  /**
+   * 서버 상태를 차량 인스턴스에 반영합니다.
+   * @param car 대상 차량.
+   * @param player 서버 플레이어 상태.
+   */
+  private applyServerState(
+    car: Car,
+    player: {
+      position: { x: number; y: number };
+      heading: number;
+      speed: number;
+    }
+  ): void {
+    car.position = { ...player.position };
+    car.heading = player.heading;
+    car.velocity = {
+      x: Math.cos(player.heading) * player.speed,
+      y: Math.sin(player.heading) * player.speed
+    };
   }
 
   private getPaletteForPlayer(playerId: PlayerId): CarPalette {
