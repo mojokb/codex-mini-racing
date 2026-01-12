@@ -12,6 +12,7 @@ type TrackSummary = {
  * 로비 UI를 렌더링하고 트랙/사용자 목록을 갱신합니다.
  */
 export class LobbyPanel {
+  private wrapper: HTMLDivElement;
   private userList: HTMLUListElement;
   private trackList: HTMLUListElement;
   private errorText: HTMLDivElement;
@@ -27,9 +28,14 @@ export class LobbyPanel {
   /**
    * LobbyPanel 인스턴스를 생성합니다.
    * @param client 멀티플레이어 클라이언트.
+   * @param onScreenChange 화면 전환 콜백.
    */
-  constructor(private client: MultiplayerClient) {
+  constructor(
+    private client: MultiplayerClient,
+    private onScreenChange?: (screen: 'lobby' | 'track') => void
+  ) {
     const wrapper = document.createElement('div');
+    this.wrapper = wrapper;
     wrapper.style.display = 'flex';
     wrapper.style.flexDirection = 'column';
     wrapper.style.gap = '8px';
@@ -124,6 +130,14 @@ export class LobbyPanel {
   }
 
   /**
+   * 로비 패널 표시 여부를 설정합니다.
+   * @param isVisible 표시 여부.
+   */
+  setVisible(isVisible: boolean): void {
+    this.wrapper.style.display = isVisible ? 'flex' : 'none';
+  }
+
+  /**
    * 로비 상태 업데이트를 처리합니다.
    * @param state 로비 상태 데이터.
    */
@@ -141,6 +155,9 @@ export class LobbyPanel {
   private handleTrackState = (track: TrackSummary): void => {
     this.currentTrack = track;
     this.updateTrackStatus();
+    if (this.isSessionInTrack(track)) {
+      this.notifyScreenChange('track');
+    }
   };
 
   /**
@@ -259,6 +276,7 @@ export class LobbyPanel {
       track.players?.some((player) => player.id === (this.sessionId ?? '')),
     );
     if (!activeTrack) {
+      this.notifyScreenChange('lobby');
       if (this.currentTrack) {
         this.currentTrack = null;
         this.countdownActive = false;
@@ -275,6 +293,26 @@ export class LobbyPanel {
       this.raceStatusText.textContent = '';
       this.updateTrackStatus();
     }
+  }
+
+  /**
+   * 현재 세션이 트랙에 포함되는지 확인합니다.
+   * @param track 트랙 정보.
+   * @returns 포함되면 true.
+   */
+  private isSessionInTrack(track: TrackSummary): boolean {
+    if (!this.sessionId) {
+      return false;
+    }
+    return Boolean(track.players?.some((player) => player.id === this.sessionId));
+  }
+
+  /**
+   * 화면 전환 콜백을 호출합니다.
+   * @param screen 화면 상태.
+   */
+  private notifyScreenChange(screen: 'lobby' | 'track'): void {
+    this.onScreenChange?.(screen);
   }
 
   /**
