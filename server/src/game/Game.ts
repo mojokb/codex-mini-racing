@@ -63,13 +63,17 @@ export class Game {
   private raceFinished = false;
   private winner: { id: string; name: string } | null = null;
 
+  /**
+   * 플레이어를 트랙에 추가합니다.
+   * @param id 플레이어 ID.
+   * @param name 표시할 이름(선택).
+   */
   addPlayer(id: string, name = `Player ${this.players.size + 1}`): void {
     if (this.players.has(id)) {
       return;
     }
 
-    const offset = this.players.size * 90;
-    const spawn = { x: this.track.spawn.x + offset, y: this.track.spawn.y };
+    const spawn = { ...this.track.spawn };
     this.players.set(id, {
       id,
       name,
