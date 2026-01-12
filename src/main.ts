@@ -48,9 +48,11 @@ function setScreen(nextScreen: Screen): void {
   lobbyPanel.setVisible(isLobby);
   game.setVisible(!isLobby);
   if (isLobby) {
+    game.leaveTrack();
     game.stop();
     return;
   }
+  game.enterTrack();
   game.start();
 }
 
