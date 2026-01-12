@@ -45,12 +45,12 @@ const DEFAULT_INPUT: InputState = {
   reset: false
 };
 
-const ACCELERATION = 28;
-const BRAKE = 36;
-const TURN_RATE = 3.6;
+const ACCELERATION = 220;
+const BRAKE = 260;
+const TURN_RATE = 2.6;
 const DRAG = 2.2;
-const MAX_SPEED = 55;
-const MAX_REVERSE = -20;
+const MAX_SPEED = 180;
+const MAX_REVERSE = -90;
 const LAPS_TO_WIN = 5;
 
 export class Game {
@@ -73,7 +73,7 @@ export class Game {
       return;
     }
 
-    const spawn = { ...this.track.spawn };
+    const spawn = this.getSpawnForSlot(this.players.size);
     this.players.set(id, {
       id,
       name,
@@ -267,5 +267,16 @@ export class Game {
     if (checkpointIndex === 1) {
       player.lapActive = true;
     }
+  }
+
+  private getSpawnForSlot(slot: number): { x: number; y: number } {
+    const checkpoint = this.track.checkpoints[0];
+    const baseX = checkpoint ? checkpoint.x + checkpoint.width * 0.5 : this.track.spawn.x;
+    const baseY = checkpoint ? checkpoint.y + checkpoint.height * 0.5 : this.track.spawn.y;
+    const spacing = 28;
+    const pairIndex = Math.floor(slot / 2) + 0.5;
+    const direction = slot % 2 === 0 ? -1 : 1;
+    const offsetX = direction * pairIndex * spacing;
+    return { x: baseX + offsetX, y: baseY };
   }
 }

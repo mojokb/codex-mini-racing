@@ -395,6 +395,18 @@ export class Game {
     const activeIds = new Set(players.map((player) => player.id));
     players.forEach((player) => {
       const car = this.cars.get(player.id);
+      if (player.id === this.localPlayerId) {
+        if (!car) {
+          const palette = this.getPaletteForPlayer(player.id);
+          const newCar = new Car(player.position, palette);
+          this.applyServerState(newCar, player);
+          this.cars.set(player.id, newCar);
+        }
+        if (car && this.shouldReconcileLocal(car.position, player.position)) {
+          this.reconcileLocalCar(car, player);
+        }
+        return;
+      }
       if (car) {
         this.applyServerState(car, player);
         return;
@@ -410,6 +422,39 @@ export class Game {
         this.cars.delete(id);
       }
     });
+  }
+
+  private shouldReconcileLocal(
+    localPos: { x: number; y: number },
+    serverPos: { x: number; y: number }
+  ): boolean {
+    const dx = localPos.x - serverPos.x;
+    const dy = localPos.y - serverPos.y;
+    return dx * dx + dy * dy > 144;
+  }
+
+  private reconcileLocalCar(
+    car: Car,
+    player: {
+      position: { x: number; y: number };
+      heading: number;
+      speed: number;
+    }
+  ): void {
+    const alpha = 0.2;
+    car.position = {
+      x: car.position.x + (player.position.x - car.position.x) * alpha,
+      y: car.position.y + (player.position.y - car.position.y) * alpha
+    };
+    car.heading = car.heading + (player.heading - car.heading) * alpha;
+    const targetVelocity = {
+      x: Math.cos(player.heading) * player.speed,
+      y: Math.sin(player.heading) * player.speed
+    };
+    car.velocity = {
+      x: car.velocity.x + (targetVelocity.x - car.velocity.x) * alpha,
+      y: car.velocity.y + (targetVelocity.y - car.velocity.y) * alpha
+    };
   }
 
   /**

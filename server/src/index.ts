@@ -452,7 +452,7 @@ const restartRaceForTrack = (track: TrackRoom): void => {
   startRaceForTrack(track);
 };
 
-const stateSyncRateHz = Number(process.env.STATE_SYNC_RATE_HZ) || 20;
+const stateSyncRateHz = Number(process.env.STATE_SYNC_RATE_HZ) || 60;
 const stateSyncIntervalTicks = Math.max(1, Math.round(Game.TICK_RATE / stateSyncRateHz));
 const tickMs = 1000 / Game.TICK_RATE;
 let tickCount = 0;
