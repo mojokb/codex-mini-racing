@@ -41,6 +41,7 @@ export class Game {
   private latestServerState: unknown = null;
   private running = false;
   private frameId: number | null = null;
+  private isInTrack = false;
 
   private static readonly STEP = MultiplayerSpec.tickSeconds;
 
@@ -103,6 +104,22 @@ export class Game {
     this.canvas.style.display = isVisible ? 'block' : 'none';
   }
 
+  /**
+   * 트랙 입장 상태로 전환합니다.
+   * @returns 반환값 없음.
+   */
+  enterTrack(): void {
+    this.isInTrack = true;
+  }
+
+  /**
+   * 트랙 입장 상태를 해제합니다.
+   * @returns 반환값 없음.
+   */
+  leaveTrack(): void {
+    this.isInTrack = false;
+  }
+
   private resetLap(timestamp: number): void {
     this.lapStartTime = timestamp;
     this.lapTime = 0;
@@ -132,6 +149,9 @@ export class Game {
   };
 
   private update(dt: number, timestamp: number): void {
+    if (!this.isInTrack) {
+      return;
+    }
     const snapshot = this.input.createSnapshot();
     const input = snapshot.state;
     const sent = this.networkClient?.sendInput(snapshot) ?? false;
@@ -186,6 +206,10 @@ export class Game {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.fillStyle = '#0b0b0b';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    if (!this.isInTrack) {
+      return;
+    }
 
     const localCar = this.getLocalCar();
     const cameraX = Math.round(localCar?.position.x ?? 0);
